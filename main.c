@@ -5,7 +5,7 @@
 //
 // http://www.lysator.liu.se/c/ANSI-C-grammar-y.html
 
-char* name = "/Users/ant/Desktop/RuC2/tests/stud/bad-comments-parsing.c";
+char* name = "../Tests/test.c";
 
 #include <stdio.h>
 #include <string.h>
@@ -54,78 +54,77 @@ extern void ext_decl();
 
 int main()
 {
-    int i;
-    
-    for (i=0; i<256; i++)
-        hashtab[i] = 0;
-    output = fopen("/Users/ant/Desktop/RuC2/tree.txt", "wt");
-    
-// занесение ключевых слов в reprtab
-    keywordsnum = 1;
-    input =  fopen("/Users/ant/Desktop/RuC/keywords.txt", "r");
-    getnext();
-    nextch();
-    while (scan() != LEOF)
-        ;
-    fclose(input);
-    
-    input =  fopen(name, "r");
-    if (input == NULL)
-    {
-        printf(" не найден файл %s\n", name);
-        exit(1);
-    }
-    modetab[1] = 0;
-    keywordsnum = 0;
-    lines[line = 1] = 1;
-    charnum = 1;
-    kw = 1;
-    tc = 0;
-    getnext();
-    nextch();
-    next = scan();
-    
-    ext_decl();
-    
-    lines[line+1] = charnum;
-    tablesandtree();
-    fclose(output);
-    
-    output = fopen("/Users/ant/Desktop/RuC2/codes.txt", "wt");
-    
-    codegen();
+	int i;
 
-    tablesandcode();
+	for (i = 0; i < 256; i++)
+		hashtab[i] = 0;
+	output = fopen("../tree.txt", "wt");
 
-    fclose(input);
-    fclose(output);
-    
-    output = fopen("/Users/ant/Desktop/RuC2/export.txt", "wt");
-    fprintf(output, "%i %i %i %i %i\n", pc, funcnum, id, rp, maxdisplg);
-    
-    for (i=0; i<pc; i++)
-    {
-        fprintf(output, "%i ", mem[i]);
-    }
-    fprintf(output, "\n");
+	// занесение ключевых слов в reprtab
+	keywordsnum = 1;
+	input = fopen("../keywords.txt", "r");
+	getnext();
+	nextch();
+	while (scan() != LEOF)
+		;
+	fclose(input);
 
-    for (i=0; i<funcnum; i++)
-        fprintf(output, "%i ", functions[i]);
-    fprintf(output, "\n");
-    
-    for (i=0; i<id; i++)
-        fprintf(output, "%i ", identab[i]);
-    fprintf(output, "\n");
+	input = fopen(name, "r");
+	if (input == NULL)
+	{
+		printf(" не найден файл %s\n", name);
+		exit(1);
+	}
+	modetab[1] = 0;
+	keywordsnum = 0;
+	lines[line = 1] = 1;
+	charnum = 1;
+	kw = 1;
+	tc = 0;
+	getnext();
+	nextch();
+	next = scan();
 
-    for (i=0; i<rp; i++)
-        fprintf(output, "%i ", reprtab[i]);
-    fprintf(output, "\n");
-    
-    fclose(output);
+	ext_decl();
 
-    if (notrobot)
-        import();
+	lines[line + 1] = charnum;
+	tablesandtree();
+	fclose(output);
 
-    return 0;
+	output = fopen("../codes.txt", "wt");
+
+	codegen();
+
+	tablesandcode();
+
+	fclose(input);
+	fclose(output);
+
+	output = fopen("../export.txt", "wt");
+	fprintf(output, "%i %i %i %i %i\n", pc, funcnum, id, rp, maxdisplg);
+
+	for (i = 0; i < pc; i++)
+	{
+		fprintf(output, "%i ", mem[i]);
+	}
+	fprintf(output, "\n");
+
+	for (i = 0; i < funcnum; i++)
+		fprintf(output, "%i ", functions[i]);
+	fprintf(output, "\n");
+
+	for (i = 0; i < id; i++)
+		fprintf(output, "%i ", identab[i]);
+	fprintf(output, "\n");
+
+	for (i = 0; i < rp; i++)
+		fprintf(output, "%i ", reprtab[i]);
+	fprintf(output, "\n");
+
+	fclose(output);
+
+	if (notrobot)
+		import();
+
+	return 0;
 }
-

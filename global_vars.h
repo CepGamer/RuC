@@ -45,4 +45,14 @@ extern int anst, anstdispl, ansttype;
 // opassn+11, если нужно присвоить значение по адресу из верхушки стека,
 // opassn,    если нужно присвоить переменной, смещение в boxdispl
 
+#define LLGEN
+
+#ifdef LLGEN
+#define LLFILE "out.ll"
+FILE* ll_out;
+int num_reg = 0, ll_sp = 0, label_num = 1, ll_spl = 0;
+int regs[10000] = { 0 };
+int reg_param[100] = { 0 }, ll_stack[100] = { 0 }, ll_labels[100] = { 0 };
+#endif
+
 #endif
