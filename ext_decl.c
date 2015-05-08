@@ -8,21 +8,21 @@ extern void error(int e);
 
 void mustbe(int what, int e)
 {
-    if (scaner() != what)
-        error(e);
+	if (scaner() != what)
+		error(e);
 }
 
 void totree(int op)
 {
-    tree[tc++] = op;
+	tree[tc++] = op;
 }
 
 void totreef(int op)
 {
-    tree[tc++] = op;
-    if ( ansttype == LFLOAT && ((op >= PLUSASS && op <= DIVASS) || (op >= PLUSASSAT && op <= DIVASSAT) ||
-                                (op >= EQEQ && op <= UNMINUS)) )
-        tree[tc-1] += 50;
+	tree[tc++] = op;
+	if (ansttype == LFLOAT && ((op >= PLUSASS && op <= DIVASS) || (op >= PLUSASSAT && op <= DIVASSAT) ||
+		(op >= EQEQ && op <= UNMINUS)))
+		tree[tc - 1] += 50;
 }
 
 int toidentab(int f)                 // f=0, если не ф-ция, f=1, если метка, f=funcnum, если описание ф-ции и -1, если ф-ция-параметр
@@ -501,15 +501,15 @@ void exprassn(int level)
 
 void expr()
 {
-    exprassn(0);
-    while (next == COMMA)
-    {
-        exprassnvoid();
-        sopnd--;
-        scaner();
-        scaner();
-        exprassn(0);
-    }
+	exprassn(0);
+	while (next == COMMA)
+	{
+		exprassnvoid();
+		sopnd--;
+		scaner();
+		scaner();
+		exprassn(0);
+	}
 }
 
 int arrinit(int decl_type)

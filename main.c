@@ -55,7 +55,6 @@ extern void ext_decl();
 int main()
 {
 	int i;
-
 	for (i = 0; i < 256; i++)
 		hashtab[i] = 0;
 	output = fopen("../tree.txt", "wt");

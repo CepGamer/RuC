@@ -9,8 +9,26 @@
 extern void error(int err);
 
 #ifdef LLGEN
-void ll_repr_print(int repr) {
+FILE *ll_out;
+
+int num_reg = 0, ll_sp = 0, label_num = 1, ll_spl = 0;
+int regs[10000] = { 0 };
+int reg_param[100] = { 0 }, ll_stack[100] = { 0 }, ll_labels[100] = { 0 };
+int values_arr[100];
+int strings_arr[100];
+int levels[10000] = { 0 };
+int level;
+
+void ll_repr_print(int level, int repr) {
+	if (repr <= 25) { 
+		fprintf(ll_out, "@main");
+		return;
+	}
 	repr += 2;
+	if (level)
+		fprintf(ll_out, "%c", '%%');
+	else
+		fprintf(ll_out, "%c", '@');
 	while (reprtab[repr])
 	{
 		fprintf(ll_out, "%c", reprtab[repr++]);
@@ -21,15 +39,19 @@ void ll_type_print(int type) {
 	switch (type)
 	{
 	case LCHAR:
+	case FUNCCHAR:
 		fprintf(ll_out, "i8");
 		break;
 	case LINT:
+	case FUNCINT:
 		fprintf(ll_out, "i32");
 		break;
 	case LFLOAT:
+	case FUNCFLOAT:
 		fprintf(ll_out, "float");
 		break;
 	case LVOID:
+	case FUNCVOID:
 		fprintf(ll_out, "void");
 		break;
 	default:
@@ -42,12 +64,11 @@ void ll_label_print(int type) {
 	switch (type)
 	{
 	case 1:
-		fprintf(ll_out, "label.true%d:\n", label_num++);
+		fprintf(ll_out, "label.true%d:\n", label_num);
 		break;
 	case 2:
-		fprintf(ll_out, "label.false%d:\n", label_num++);
+		fprintf(ll_out, "label.false%d:\n", label_num);
 		break;
-
 	default:
 		fprintf(ll_out, "label%d:\n", label_num++);
 		break;
@@ -58,28 +79,73 @@ void ll_label_print(int type) {
 
 void tocode(int c)
 {
-//    printf("pc %i) %i\n", pc, c);
-    mem[pc++] = c;
+	//    printf("pc %i) %i\n", pc, c);
+	mem[pc++] = c;
+#ifdef LLGEN
+	switch (c) {
+	case INC:
+		fprintf(ll_out, "%%%d = load ", num_reg++);
+		ll_type_print(ansttype);
+		fprintf(ll_out, "* ");
+		ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
+		fprintf(ll_out, "\n%%%d = add i32 1, %%%d\nstore i32 %%%d, i32* ", num_reg, num_reg - 1, num_reg);
+		ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
+		fprintf(ll_out, "\n");
+		regs[ll_stack[ll_sp - 1]] = num_reg++;
+		break;
+	case ASS:
+		fprintf(ll_out, "%%%d = ", num_reg);
+		regs[ll_stack[ll_sp - 3]] = num_reg++;
+	case ASSV:
+		fprintf(ll_out, "store ");
+		ll_type_print(ansttype);
+		switch (ll_stack[--ll_sp - 1]) {
+		case TConst:
+			switch (ansttype) {
+			case LINT:
+				fprintf(ll_out, " %d, ", ll_stack[ll_sp]);
+				break;
+			case LFLOAT:
+				fprintf(ll_out, " %X, ", ll_stack[ll_sp]);
+				break;
+			}
+			ll_sp--;
+			ll_type_print(ansttype);
+			fprintf(ll_out, "* ");
+			ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
+			fprintf(ll_out, "\n");
+			ll_sp -= 2;
+			break;
+		}
+		break;
+	default:
+		break;
+	}
+/*	if ((c >= ASS && c <= DIVASS) || (c >= ASSV && c <= DIVASSV) ||
+		(c >= PLUSASSR && c <= DIVASSR) || (c >= PLUSASSRV && c <= DIVASSRV) ||
+		(c >= POSTINC && c <= DEC) || (c >= POSTINCV && c <= DECV) ||
+		(c >= POSTINCR && c <= DECR) || (c >= POSTINCRV && c <= DECRV))*/
+#endif
 }
 
 void adbreakend()
 {
-    while (adbreak)
-    {
-        int r = mem[adbreak];
-        mem[adbreak] = pc;
-        adbreak = r;
-    }
+	while (adbreak)
+	{
+		int r = mem[adbreak];
+		mem[adbreak] = pc;
+		adbreak = r;
+	}
 }
 
 void adcontend()
 {
-    while (adcont)
-    {
-        int r = mem[adcont];
-        mem[adcont] = pc;
-        adcont = r;
-    }
+	while (adcont)
+	{
+		int r = mem[adcont];
+		mem[adcont] = pc;
+		adcont = r;
+	}
 }
 
 void Expr_gen()
@@ -93,6 +159,10 @@ void Expr_gen()
 		{
 			lastid = tree[tc++];
 			anstdispl = identab[lastid + 3];
+#ifdef LLGEN
+			ll_stack[ll_sp++] = TIdent;
+			ll_stack[ll_sp++] = lastid;
+#endif
 		}
 		break;
 
@@ -115,6 +185,10 @@ void Expr_gen()
 		{
 			tocode(LI);
 			tocode(tree[tc++]);
+#ifdef LLGEN
+			ll_stack[ll_sp++] = TConst;
+			ll_stack[ll_sp++] = tree[tc - 1];
+#endif
 		}
 		break;
 
@@ -156,8 +230,12 @@ void Expr_gen()
 		{
 			int i, n = tree[tc++];
 			tocode(CALL1);
-			for (i = 0; i < n; i++)
+#ifdef LLGEN
+
+#endif
+			for (i = 0; i < n; i++){
 				Expr_gen();
+			}
 		}
 		break;
 
@@ -408,6 +486,9 @@ void Stmt_gen()
 	case TReturn:
 	{
 		tocode(RETURNV);
+#ifdef LLGEN
+		fprintf(ll_out, "ret void\n");
+#endif
 	}
 	break;
 
@@ -416,6 +497,19 @@ void Stmt_gen()
 		_box = VAL;
 		Expr_gen();
 		tocode(_RETURN);
+#ifdef LLGEN
+		fprintf(ll_out, "ret ");
+		ll_type_print(ansttype);
+		switch (ll_stack[ll_sp - 2]) {
+		case TConst:
+			fprintf(ll_out, " %d\n", ll_stack[ll_sp - 1]);
+			ll_sp -= 2;
+			break;
+		default:
+			fprintf(ll_out, " %%%d\n", num_reg - 1);
+			break;
+		}
+#endif
 	}
 	break;
 
@@ -423,6 +517,11 @@ void Stmt_gen()
 	{
 		tocode(PRINT);
 		tocode(tree[tc++]);  // type
+#ifdef LLGEN
+		fprintf(ll_out, "call void @print (");
+		ll_type_print(tree[tc - 1]);
+		fprintf(ll_out, " %%%d)\n", num_reg - 1);
+#endif
 	}
 	break;
 
@@ -480,8 +579,21 @@ void Declid_gen()
 	int olddispl = identab[identref + 3], i;
 	if (N == 0)
 	{
+#ifdef LLGEN
+		ll_repr_print(level, identab[identref + 1]);
+		if (level) {
+			fprintf(ll_out, " = alloca ");
+			ll_type_print(modetab[identref + 2]);
+			levels[identref] = 1;
+		}
+		fprintf(ll_out, "\n");
+#endif
 		if (initref)
 		{
+#ifdef LLGEN
+			ll_stack[ll_sp++] = TIdent;
+			ll_stack[ll_sp++] = identref;
+#endif
 			Expr_gen();
 			tocode(ASSV);
 			tocode(olddispl);
@@ -534,6 +646,9 @@ void compstmt_gen()
 			break;
 
 		default:
+#ifdef LLGEN
+			ll_sp = 0;
+#endif
 			Stmt_gen();
 		}
 	}
@@ -543,6 +658,13 @@ void compstmt_gen()
 void codegen()
 {
 	int oldtc = tc;
+#ifdef LLGEN
+	ll_out = fopen(LLFILE, "w");
+	fprintf(ll_out, "target triple = \"i686-pc-windows-gnu\"\n");
+	fprintf(ll_out, "declare i32 @printf(i8*, ...)\n\n");
+	fprintf(ll_out, "@.strd = private constant [3 x i8] c\"%%d\\00\"\n\n");
+	fprintf(ll_out, "define void @print(i32 %%x){\ncall i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([3 x i8]* @.strd, i32 0, i32 0), i32 %%x)\nret void\n}\n\n");
+#endif
 	tc = 0;
 	while (tc < oldtc)
 		switch (tree[tc++])
@@ -551,19 +673,49 @@ void codegen()
 		{
 			int identref = tree[tc++], maxdispl = tree[tc++];
 			int fn = identab[identref + 3], pred;
+			int i, n, moderef = identab[identref + 2];
 			functions[fn] = pc;
 			tocode(FUNCBEG);
 			tocode(maxdispl + 1);
 			pred = pc++;
 			tc++;             // TBegin
+#ifdef LLGEN
+			level = num_reg = 1;
+			fprintf(ll_out, "define ");
+			ll_type_print(modetab[moderef]);
+			fprintf(ll_out, " ");
+			ll_repr_print(0, identab[identref + 1]);
+			n = modetab[moderef + 1];
+			fprintf(ll_out, "(");
+			// TODO by ANT
+			/*
+			if (n > 0) {
+				ll_type_print(modetab[moderef + 2]);
+				fprintf(ll_out, " ");
+				ll_repr_print(modetab[moderef + 3]);
+			}
+			for (i = 1; i < n; i++){
+				fprintf(ll_out, ", ");
+				ll_type_print(modetab[moderef + 2 + 2 * i]);
+				fprintf(ll_out, " ");
+				ll_repr_print(modetab[moderef + 3 + 2 * i]);
+			}
+			*/
+			fprintf(ll_out, ") {\n");
+#endif
 			compstmt_gen();
+#ifdef LLGEN
+			fprintf(ll_out, "}\n\n");
+#endif
 			mem[pred] = pc;
 		}
 		break;
 
 		case TDeclid:
+#ifdef LLGEN
+			level = 0;
+#endif
 			Declid_gen();
-
 			break;
 
 		default:
@@ -579,4 +731,7 @@ void codegen()
 	tocode(CALL2);
 	tocode(identab[wasmain + 3]);
 	tocode(STOP);
+#ifdef LLGEN
+	fclose(ll_out);
+#endif
 }
