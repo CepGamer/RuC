@@ -452,7 +452,7 @@ void import()
 		case NOP:
 			;
 			break;
-		case B:
+		case RUCB:
 		case STRING:
 			pc = mem[pc];
 			break;

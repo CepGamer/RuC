@@ -186,7 +186,7 @@
 #define CALL2   163
 #define _RETURN 164
 #define RETURNV 165
-#define B       166
+#define RUCB    166
 #define BE0     167
 #define BNE0    168
 #define SLICE   169
@@ -220,7 +220,7 @@
 
 #define VAL       110
 #define ADDR      111
-#define F         112
+#define RUCF      112
 
 // Ключевые слова
 

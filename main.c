@@ -94,6 +94,8 @@ int main()
 
 	codegen();
 
+	return 5;
+
 	tablesandcode();
 
 	fclose(input);

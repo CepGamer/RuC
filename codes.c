@@ -606,7 +606,7 @@ void tablesandcode()
 		case RETURNV:
 			fprintf(output, "RETURNV\n");
 			break;
-		case B:
+		case RUCB:
 			fprintf(output, "B ");
 			fprintf(output, "%i\n", mem[i++]);
 			break;
@@ -976,7 +976,7 @@ void cd(int pcl)
 		case RETURNV:
 			printf("RETURNV\n");
 			break;
-		case B:
+		case RUCB:
 			printf("B ");
 			printf("%i\n", mem[i++]);
 			break;

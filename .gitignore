@@ -1,5 +1,9 @@
 .DS_Store
+
 Debug/*
-RuC2.*
+
+
 *.exe
+
 *.ll
+RuC2.v*

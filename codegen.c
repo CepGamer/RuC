@@ -9,7 +9,18 @@
 extern void error(int err);
 
 #ifdef LLGEN
+#include <llvm-c\Core.h>
+#include <llvm-c\ExecutionEngine.h>
+#include <llvm-c\Target.h>
+#include <llvm-c\BitWriter.h>
+#include <llvm-c\IRReader.h>
+#include <llvm-c\TargetMachine.h>
+#include <llvm-c\Object.h>
+
 FILE *ll_out;
+
+LLVMModuleRef ll_module;
+LLVMBuilderRef ll_builder;
 
 int num_reg = 0, ll_sp = 0, label_num = 1, ll_spl = 0;
 int regs[10000] = { 0 };
@@ -56,6 +67,27 @@ void ll_type_print(int type) {
 		break;
 	default:
 		fprintf(ll_out, "i32");
+		break;
+	}
+}
+
+LLVMTypeRef ll_type_ref(int type){
+	switch (type)
+	{
+	case LCHAR:
+		LLVMInt8Type();
+		break;
+	case LINT:
+		return LLVMInt32Type();
+		break;
+	case LFLOAT:
+		return LLVMFloatType();
+		break;
+	case LVOID:
+		return LLVMVoidType();
+		break;
+	default:
+		return NULL;
 		break;
 	}
 }
@@ -197,7 +229,7 @@ void Expr_gen()
 			int n = -1, res;
 			tocode(LI);
 			tocode(res = pc + 4);
-			tocode(B);
+			tocode(RUCB);
 			pc += 2;
 			do
 				n++, tocode(tree[tc]);
@@ -337,7 +369,7 @@ void Stmt_gen()
 		if (elseref)
 		{
 			mem[ad] = pc + 2;
-			tocode(B);
+			tocode(RUCB);
 			ad = pc++;
 			Stmt_gen();
 		}
@@ -358,7 +390,7 @@ void Stmt_gen()
 		_box = DECX;
 		Stmt_gen();
 		adcontend();
-		tocode(B);
+		tocode(RUCB);
 		tocode(ad);
 		adbreakend();
 		adbreak = oldbreak;
@@ -414,7 +446,7 @@ void Stmt_gen()
 			Expr_gen();         // incr
 			tc = endtc;
 		}
-		tocode(B);
+		tocode(RUCB);
 		tocode(ad);
 		adbreakend();
 		adbreak = oldbreak;
@@ -469,7 +501,7 @@ void Stmt_gen()
 
 	case TBreak:
 	{
-		tocode(B);
+		tocode(RUCB);
 		mem[pc] = adbreak;
 		adbreak = pc++;
 	}
@@ -477,7 +509,7 @@ void Stmt_gen()
 
 	case TContinue:
 	{
-		tocode(B);
+		tocode(RUCB);
 		mem[pc] = adcont;
 		adcont = pc++;
 	}
@@ -659,6 +691,9 @@ void codegen()
 {
 	int oldtc = tc;
 #ifdef LLGEN
+	ll_module = LLVMModuleCreateWithName("out");
+	ll_builder = LLVMCreateBuilder();
+	
 	ll_out = fopen(LLFILE, "w");
 	fprintf(ll_out, "target triple = \"i686-pc-windows-gnu\"\n");
 	fprintf(ll_out, "declare i32 @printf(i8*, ...)\n\n");
@@ -674,12 +709,22 @@ void codegen()
 			int identref = tree[tc++], maxdispl = tree[tc++];
 			int fn = identab[identref + 3], pred;
 			int i, n, moderef = identab[identref + 2];
+#ifdef LLGEN
+			LLVMTypeRef param_types[10] = { NULL };
+			LLVMTypeRef ret_type;
+			LLVMValueRef func;
+#endif
 			functions[fn] = pc;
 			tocode(FUNCBEG);
 			tocode(maxdispl + 1);
 			pred = pc++;
 			tc++;             // TBegin
 #ifdef LLGEN
+			ret_type = LLVMFunctionType(ll_type_ref(modetab[moderef] + 8), param_types, 0, 0);
+			func = LLVMAddFunction(ll_module, 
+				reprtab + (identab[identref + 1] + 2 < 28 ? 10 : identab[identref + 1] + 2),
+				ret_type);
+
 			level = num_reg = 1;
 			fprintf(ll_out, "define ");
 			ll_type_print(modetab[moderef]);
@@ -732,6 +777,7 @@ void codegen()
 	tocode(identab[wasmain + 3]);
 	tocode(STOP);
 #ifdef LLGEN
+	LLVMWriteBitcodeToFile(ll_module, "out.bc");
 	fclose(ll_out);
 #endif
 }
