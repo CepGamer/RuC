@@ -12,6 +12,12 @@ extern void error(int err);
 #include <llvm-c\Core.h>
 #include <llvm-c\BitWriter.h>
 
+typedef union u
+{
+	int i;
+	float f;
+} u;
+
 FILE *ll_out;
 
 LLVMModuleRef ll_module = NULL;
@@ -106,13 +112,25 @@ void ll_label_print(int type) {
 	}
 }
 
-#endif
+LLVMValueRef ll_ret_const(int type, int value) {
+	u val;
+	switch (type) {
+	case LFLOAT:
+		val.i = value;
+		return LLVMConstReal(LLVMFloatType(), val.f);
+		break;
+	case LCHAR:
+		return LLVMConstInt(LLVMInt8Type(), value, 0);
+		break;
+	case LINT:
+	default:
+		return LLVMConstInt(LLVMInt32Type(), value, 0);
+		break;
+	}
+}
 
-void tocode(int c)
+void ll_tocode(int c)
 {
-	//    printf("pc %i) %i\n", pc, c);
-	mem[pc++] = c;
-#ifdef LLGEN
 	switch (c) {
 	case INC:
 		fprintf(ll_out, "%%%d = load ", num_reg++);
@@ -128,12 +146,18 @@ void tocode(int c)
 		fprintf(ll_out, "%%%d = ", num_reg);
 		regs[ll_stack[ll_sp - 3]] = num_reg++;
 	case ASSV:
-		LLVMBuildStore(ll_builder, LLVMConstInt(LLVMInt32Type(), ll_stack[ll_sp - 1], 0), ll_vals[ll_stack[ll_sp - 3]]);
 
 		fprintf(ll_out, "store ");
 		ll_type_print(ansttype);
 		switch (ll_stack[--ll_sp - 1]) {
 		case TConst:
+			if (level) {
+				LLVMValueRef constant = ll_ret_const(ansttype, ll_stack[ll_sp]);
+				LLVMBuildStore(ll_builder, constant, ll_vals[ll_stack[ll_sp - 2]]);
+			}
+			else {
+				LLVMSetInitializer(ll_vals[ll_stack[ll_sp - 2]], LLVMConstInt(LLVMInt32Type(), ll_stack[ll_sp], 0));
+			}
 			switch (ansttype) {
 			case LINT:
 				fprintf(ll_out, " %d, ", ll_stack[ll_sp]);
@@ -151,6 +175,9 @@ void tocode(int c)
 			fprintf(ll_out, "\n");
 			ll_sp -= 2;
 			break;
+		case TCall2:
+			LLVMBuildStore(ll_builder, ll_last, ll_vals[ll_stack[ll_sp - 2]]);
+			break;
 		}
 		break;
 	default:
@@ -160,7 +187,22 @@ void tocode(int c)
 		(c >= PLUSASSR && c <= DIVASSR) || (c >= PLUSASSRV && c <= DIVASSRV) ||
 		(c >= POSTINC && c <= DEC) || (c >= POSTINCV && c <= DECV) ||
 		(c >= POSTINCR && c <= DECR) || (c >= POSTINCRV && c <= DECRV))*/
+}
+
+LLVMValueRef ll_constr_print(int type) {
+	switch (type)
+	{
+	case LINT:
+	default:
+		break;
+	}
+}
 #endif
+
+void tocode(int c)
+{
+	//    printf("pc %i) %i\n", pc, c);
+	mem[pc++] = c;
 }
 
 void adbreakend()
@@ -221,6 +263,8 @@ void Expr_gen()
 			tocode(LI);
 			tocode(tree[tc++]);
 #ifdef LLGEN
+			ll_last = ll_ret_const(ansttype, tree[tc - 1]);
+
 			ll_stack[ll_sp++] = TConst;
 			ll_stack[ll_sp++] = tree[tc - 1];
 #endif
@@ -265,9 +309,6 @@ void Expr_gen()
 		{
 			int i, n = tree[tc++];
 			tocode(CALL1);
-#ifdef LLGEN
-
-#endif
 			for (i = 0; i < n; i++){
 				Expr_gen();
 			}
@@ -276,6 +317,13 @@ void Expr_gen()
 
 		case TCall2:
 		{
+#ifdef LLGEN
+			ll_last = LLVMBuildCall(ll_builder, ll_vals[-tree[tc]], NULL, 0, LLVMGetValueName(ll_vals[-tree[tc]]));
+
+			ll_stack[ll_sp++] = TCall2;
+			ll_sp++;
+			ll_tocode(CALL2);
+#endif
 			tocode(CALL2);
 			tocode(identab[-tree[tc++] + 3]);
 		}
@@ -285,6 +333,9 @@ void Expr_gen()
 		{
 			tc++;
 			tocode(c);
+#ifdef LLGEN
+			ll_tocode(c);
+#endif
 			if ((c >= ASS && c <= DIVASS) || (c >= ASSV && c <= DIVASSV) ||
 				(c >= PLUSASSR && c <= DIVASSR) || (c >= PLUSASSRV && c <= DIVASSRV) ||
 				(c >= POSTINC && c <= DEC) || (c >= POSTINCV && c <= DECV) ||
@@ -557,6 +608,8 @@ void Stmt_gen()
 		tocode(PRINT);
 		tocode(tree[tc++]);  // type
 #ifdef LLGEN
+//		LLVMBuildCall();
+
 		fprintf(ll_out, "call void @print (");
 		ll_type_print(tree[tc - 1]);
 		fprintf(ll_out, " %%%d)\n", num_reg - 1);
@@ -624,7 +677,8 @@ void Declid_gen()
 			ll_vals[identref] = ll_last;
 		}
 		else {
-			LLVMAddGlobal(ll_module, ll_type_ref(ansttype), reprtab + (identab[identref + 1] + 2));
+			ll_last = LLVMAddGlobal(ll_module, ll_type_ref(ansttype), reprtab + (identab[identref + 1] + 2));
+			ll_vals[identref] = ll_last;
 		}
 
 
@@ -644,12 +698,26 @@ void Declid_gen()
 #endif
 			Expr_gen();
 			tocode(ASSV);
+#ifdef LLGEN
+			ll_tocode(ASSV);
+#endif
 			tocode(olddispl);
 		}
 	}
 	else if (N == 1)
 	{
 		Expr_gen();
+#ifdef LLGEN
+		if (level) {
+/*			LLVMBuildArrayAlloca(ll_builder, 
+				LLVMArrayType(ll_type_ref(ansttype + 4), ll_last), 
+				, 
+				(char*)(reprtab + (identab[identref + 1] + 2)));
+	*/	}
+		else {
+			LLVMAddGlobal(ll_module, LLVMArrayType(ll_type_ref(ansttype + 4), ll_last), (char*)(reprtab + (identab[identref + 1] + 2)));
+		}
+#endif
 		tocode(DEFARR);
 		tocode(olddispl);
 		if (initref)
@@ -658,6 +726,9 @@ void Declid_gen()
 			int L = tree[tc++];
 			for (i = 0; i < L; i++)
 				Expr_gen();
+#ifdef LLGEN
+//			LLVMSetInitializer
+#endif
 			tocode(ASSARR);
 			tocode(olddispl);
 			tocode(L);
@@ -741,6 +812,7 @@ void codegen()
 			ll_func = LLVMAddFunction(ll_module, 
 				reprtab + (identab[identref + 1] + 2 < 28 ? 10 : identab[identref + 1] + 2),
 				ret_type);
+			ll_vals[identref] = ll_func;
 			entry = LLVMAppendBasicBlock(ll_func, "entry");
 			LLVMPositionBuilderAtEnd(ll_builder, entry);
 
