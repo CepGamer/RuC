@@ -48,12 +48,9 @@ extern int anst, anstdispl, ansttype;
 #define LLGEN
 
 #ifdef LLGEN
-#define LLFILE "../out.ll"
-extern FILE *ll_out;
 
-extern int num_reg, ll_sp, label_num, ll_spl;
-extern int regs[10000];
-extern int reg_param[100], ll_stack[100], ll_labels[100];
+extern int ll_sp, ll_spl;
+extern int ll_stack[100];
 #endif
 
 #endif

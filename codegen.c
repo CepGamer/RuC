@@ -9,8 +9,13 @@
 extern void error(int err);
 
 #ifdef LLGEN
+#include <string.h>
 #include <llvm-c\Core.h>
 #include <llvm-c\BitWriter.h>
+
+#define LLBOOL 900
+
+#define LLCOMP 1000
 
 typedef union u
 {
@@ -18,62 +23,26 @@ typedef union u
 	float f;
 } u;
 
-FILE *ll_out;
-
 LLVMModuleRef ll_module = NULL;
 LLVMBuilderRef ll_builder = NULL;
-LLVMValueRef ll_func = NULL;
+LLVMValueRef ll_func = NULL, ll_printf, ll_memcpy;
+LLVMValueRef print[12];
 
-int num_reg = 0, ll_sp = 0, label_num = 1, ll_spl = 0;
-LLVMValueRef ll_last = NULL;
+int ll_sp = 0, ll_spl = 0;
 int regs[10000] = { 0 };
 LLVMValueRef ll_vals[10000] = { NULL };
 int reg_param[100] = { 0 }, ll_stack[100] = { 0 }, ll_labels[100] = { 0 };
 LLVMValueRef ll_val_stack[100] = { NULL };
 int values_arr[100];
 int strings_arr[100];
-int levels[10000] = { 0 };
 int level;
+char ll_reprtab[100] = { 0 };
 
-void ll_repr_print(int level, int repr) {
-	if (repr <= 25) { 
-		fprintf(ll_out, "@main");
-		return;
-	}
+void ll_repr_cpy(int repr) {
+	int i = 0;
 	repr += 2;
-	if (level)
-		fprintf(ll_out, "%c", '%%');
-	else
-		fprintf(ll_out, "%c", '@');
-	while (reprtab[repr])
-	{
-		fprintf(ll_out, "%c", reprtab[repr++]);
-	}
-}
-
-void ll_type_print(int type) {
-	switch (type)
-	{
-	case LCHAR:
-	case FUNCCHAR:
-		fprintf(ll_out, "i8");
-		break;
-	case LINT:
-	case FUNCINT:
-		fprintf(ll_out, "i32");
-		break;
-	case LFLOAT:
-	case FUNCFLOAT:
-		fprintf(ll_out, "float");
-		break;
-	case LVOID:
-	case FUNCVOID:
-		fprintf(ll_out, "void");
-		break;
-	default:
-		fprintf(ll_out, "i32");
-		break;
-	}
+	while (ll_reprtab[i] = (char)(reprtab[repr + i]))
+		i++;
 }
 
 LLVMTypeRef ll_type_ref(int type){
@@ -97,19 +66,7 @@ LLVMTypeRef ll_type_ref(int type){
 	}
 }
 
-void ll_label_print(int type) {
-	switch (type)
-	{
-	case 1:
-		fprintf(ll_out, "label.true%d:\n", label_num);
-		break;
-	case 2:
-		fprintf(ll_out, "label.false%d:\n", label_num);
-		break;
-	default:
-		fprintf(ll_out, "label%d:\n", label_num++);
-		break;
-	}
+LLVMValueRef ll_extract_value() {
 }
 
 LLVMValueRef ll_ret_const(int type, int value) {
@@ -122,6 +79,9 @@ LLVMValueRef ll_ret_const(int type, int value) {
 	case LCHAR:
 		return LLVMConstInt(LLVMInt8Type(), value, 0);
 		break;
+	case LLBOOL:
+		return LLVMConstInt(LLVMInt1Type(), value, 0);
+		break;
 	case LINT:
 	default:
 		return LLVMConstInt(LLVMInt32Type(), value, 0);
@@ -129,56 +89,104 @@ LLVMValueRef ll_ret_const(int type, int value) {
 	}
 }
 
+void ll_add_to_stack(int T, int val) {
+
+}
+
+void ll_fill_tmp(LLVMValueRef *tmp) {
+	int tmp_ind = 0;
+	do
+	switch (ll_stack[ll_sp - 2])
+	{
+		case TConst:
+			tmp[tmp_ind] = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
+			break;
+		case TIdent:
+			tmp[tmp_ind] = LLVMBuildLoad(ll_builder, ll_vals[ll_stack[ll_sp - 1]], "val");
+			break;
+		case TIdenttoval:
+			tmp[tmp_ind] = (LLVMValueRef)(void*)ll_stack[ll_sp - 1];
+		case LLCOMP:
+			tmp[tmp_ind] = ll_stack[ll_sp - 1];
+			break;
+		default:
+			break;
+	}
+	while (ll_sp -= 2, ++tmp_ind < 2);
+	ll_stack[ll_sp++] = LLCOMP;
+	ll_sp++;
+}
+
+LLVMValueRef ll_ret_last_val() {
+	LLVMValueRef toRet = NULL;
+	if (ll_sp < 2)
+		return NULL;
+	switch (ll_stack[ll_sp - 2])
+	{
+	case TIdent:
+		toRet = LLVMBuildLoad(ll_builder,
+			ll_vals[ll_stack[ll_sp - 2]],
+			"load");
+		break;
+	case TConst:
+		toRet = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
+		break;
+	case LLCOMP:
+	case TIdenttoval:
+		toRet = (LLVMValueRef)ll_stack[ll_sp - 1];
+		break;
+	default:
+		break;
+	}
+	ll_sp -= 2;
+	return toRet;
+}
+
 void ll_tocode(int c)
 {
+	LLVMValueRef tmp[2] = { NULL, NULL };
 	switch (c) {
 	case INC:
-		fprintf(ll_out, "%%%d = load ", num_reg++);
-		ll_type_print(ansttype);
-		fprintf(ll_out, "* ");
-		ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
-		fprintf(ll_out, "\n%%%d = add i32 1, %%%d\nstore i32 %%%d, i32* ", num_reg, num_reg - 1, num_reg);
-		ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
-		fprintf(ll_out, "\n");
-		regs[ll_stack[ll_sp - 1]] = num_reg++;
-		break;
 	case ASS:
-		fprintf(ll_out, "%%%d = ", num_reg);
-		regs[ll_stack[ll_sp - 3]] = num_reg++;
 	case ASSV:
-
-		fprintf(ll_out, "store ");
-		ll_type_print(ansttype);
-		switch (ll_stack[--ll_sp - 1]) {
+		switch (ll_stack[ll_sp - 2]) {
 		case TConst:
 			if (level) {
-				LLVMValueRef constant = ll_ret_const(ansttype, ll_stack[ll_sp]);
-				LLVMBuildStore(ll_builder, constant, ll_vals[ll_stack[ll_sp - 2]]);
+				LLVMValueRef constant = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
+				ll_stack[ll_sp - 3] = (int)(void*)LLVMBuildStore(ll_builder, constant, ll_vals[ll_stack[ll_sp - 3]]);
 			}
 			else {
-				LLVMSetInitializer(ll_vals[ll_stack[ll_sp - 2]], LLVMConstInt(LLVMInt32Type(), ll_stack[ll_sp], 0));
+				LLVMSetInitializer(ll_vals[ll_stack[ll_sp - 3]], ll_ret_const(LINT, ll_stack[ll_sp - 1]));
 			}
-			switch (ansttype) {
-			case LINT:
-				fprintf(ll_out, " %d, ", ll_stack[ll_sp]);
+			if (ll_sp < 4)
 				break;
-			case LFLOAT:
-				fprintf(ll_out, " %X, ", ll_stack[ll_sp]);
-				break;
-			}
-			ll_sp--;
-			if (ll_sp < 2)
-				break;
-			ll_type_print(ansttype);
-			fprintf(ll_out, "* ");
-			ll_repr_print(levels[ll_stack[ll_sp - 1]], identab[ll_stack[ll_sp - 1] + 1]);
-			fprintf(ll_out, "\n");
-			ll_sp -= 2;
 			break;
 		case TCall2:
-			LLVMBuildStore(ll_builder, ll_last, ll_vals[ll_stack[ll_sp - 2]]);
+			break;
+		case TAddrtoval:
+		case LLCOMP:
+			ll_stack[ll_sp - 3] = (int)(void*)LLVMBuildStore(ll_builder, ll_stack[ll_sp - 1], ll_vals[ll_stack[ll_sp - 3]]);
 			break;
 		}
+		ll_stack[ll_sp - 4] = LLCOMP;
+		ll_sp -= 4;
+		if (c == ASS)
+			ll_sp += 2;
+		break;
+	case LPLUS:
+		ll_fill_tmp(tmp);
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildAdd(ll_builder, tmp[0], tmp[1], "add");
+		else
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMConstAdd(tmp[0], tmp[1]);
+		break;
+	case LREM:
+		ll_fill_tmp(tmp);
+		ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildSRem(ll_builder, tmp[0], tmp[1], "srem");
+		break;
+	case LOAD:
+		ll_stack[ll_sp - 2] = TIdenttoval;
+		ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildLoad(ll_builder, ll_vals[ll_stack[ll_sp - 1]], "load");
 		break;
 	default:
 		break;
@@ -189,13 +197,42 @@ void ll_tocode(int c)
 		(c >= POSTINCR && c <= DECR) || (c >= POSTINCRV && c <= DECRV))*/
 }
 
-LLVMValueRef ll_constr_print(int type) {
+LLVMValueRef ll_constr_print_call(int type) {
+	LLVMTypeRef ll_type = NULL;
+	LLVMTypeRef params[] = { NULL };
+	LLVMValueRef args[] = { NULL, NULL };
+	LLVMValueRef str = NULL;
+	LLVMBasicBlockRef entry;
+	LLVMValueRef indices[] = { ll_ret_const(LINT, 0) };
 	switch (type)
 	{
 	case LINT:
+		params[0] = ll_type_ref(LINT);
+		type = LLVMFunctionType(LLVMVoidType(), params, 1, 0);
+		print[-LINT] = ll_func = LLVMAddFunction(ll_module, "printi32", type);
+		strcpy(ll_reprtab, "%d\n\0");
+		entry = LLVMAppendBasicBlock(ll_func, "entry");
+		LLVMPositionBuilderAtEnd(ll_builder, entry);
+		str = LLVMBuildGlobalString(ll_builder, ll_reprtab, "printi32.str");
+		args[1] = LLVMGetParam(ll_func, 0);
+		args[0] = LLVMBuildGEP(ll_builder, str, indices, 1, "f");
+		args[0] = LLVMBuildPointerCast(ll_builder, args[0], LLVMPointerType(LLVMInt8Type(), 0), "str");
+		LLVMBuildCall(ll_builder, ll_printf, args, 2, "f");
+		LLVMBuildRetVoid(ll_builder);
+		break;
+	case LFLOAT:
+	case LCHAR:
+	case ROWOFINT:
 	default:
+		return NULL;
 		break;
 	}
+}
+
+void ll_create_print() {
+	int i = -LINT;
+	for (i; i < -ROWROWOFFLOAT; i++)
+		ll_constr_print_call(-i);
 }
 #endif
 
@@ -249,6 +286,9 @@ void Expr_gen()
 			anstdispl = identab[lastid + 3];
 			tocode(LOAD);
 			tocode(anstdispl);
+#ifdef LLGEN
+			ll_tocode(LOAD);
+#endif
 		}
 		break;
 
@@ -263,8 +303,6 @@ void Expr_gen()
 			tocode(LI);
 			tocode(tree[tc++]);
 #ifdef LLGEN
-			ll_last = ll_ret_const(ansttype, tree[tc - 1]);
-
 			ll_stack[ll_sp++] = TConst;
 			ll_stack[ll_sp++] = tree[tc - 1];
 #endif
@@ -318,10 +356,8 @@ void Expr_gen()
 		case TCall2:
 		{
 #ifdef LLGEN
-			ll_last = LLVMBuildCall(ll_builder, ll_vals[-tree[tc]], NULL, 0, LLVMGetValueName(ll_vals[-tree[tc]]));
-
 			ll_stack[ll_sp++] = TCall2;
-			ll_sp++;
+			ll_stack[ll_sp++] = LLVMBuildCall(ll_builder, ll_vals[-tree[tc]], NULL, 0, LLVMGetValueName(ll_vals[-tree[tc]]));
 			ll_tocode(CALL2);
 #endif
 			tocode(CALL2);
@@ -574,8 +610,6 @@ void Stmt_gen()
 		tocode(RETURNV);
 #ifdef LLGEN
 		LLVMBuildRetVoid(ll_builder);
-
-		fprintf(ll_out, "ret void\n");
 #endif
 	}
 	break;
@@ -586,34 +620,19 @@ void Stmt_gen()
 		Expr_gen();
 		tocode(_RETURN);
 #ifdef LLGEN
-		LLVMBuildRet(ll_builder, ll_last);
-
-		fprintf(ll_out, "ret ");
-		ll_type_print(ansttype);
-		switch (ll_stack[ll_sp - 2]) {
-		case TConst:
-			fprintf(ll_out, " %d\n", ll_stack[ll_sp - 1]);
-			ll_sp -= 2;
-			break;
-		default:
-			fprintf(ll_out, " %%%d\n", num_reg - 1);
-			break;
-		}
+		LLVMBuildRet(ll_builder, ll_ret_last_val());
 #endif
 	}
 	break;
 
 	case TPrint:
 	{
+#ifdef LLGEN
+		LLVMValueRef param[] = {ll_ret_last_val()};
+		LLVMBuildCall(ll_builder, print[-ansttype], param, 1, "\0");
+#endif
 		tocode(PRINT);
 		tocode(tree[tc++]);  // type
-#ifdef LLGEN
-//		LLVMBuildCall();
-
-		fprintf(ll_out, "call void @print (");
-		ll_type_print(tree[tc - 1]);
-		fprintf(ll_out, " %%%d)\n", num_reg - 1);
-#endif
 	}
 	break;
 
@@ -655,7 +674,6 @@ void Stmt_gen()
 	}
 	break;
 
-
 	default:
 	{
 		tc--;
@@ -669,26 +687,17 @@ void Declid_gen()
 {
 	int identref = tree[tc++], initref = tree[tc++], N = tree[tc++];
 	int olddispl = identab[identref + 3], i;
+	ansttype = identab[identref + 2];
 	if (N == 0)
 	{
 #ifdef LLGEN
+		ll_repr_cpy(identab[identref + 1]);
 		if (level) {
-			ll_last = LLVMBuildAlloca(ll_builder, ll_type_ref(ansttype), reprtab + (identab[identref + 1] + 2));
-			ll_vals[identref] = ll_last;
+			ll_vals[identref] = LLVMBuildAlloca(ll_builder, ll_type_ref(identab[identref + 2]), ll_reprtab);
 		}
 		else {
-			ll_last = LLVMAddGlobal(ll_module, ll_type_ref(ansttype), reprtab + (identab[identref + 1] + 2));
-			ll_vals[identref] = ll_last;
+			ll_vals[identref] = LLVMAddGlobal(ll_module, ll_type_ref(identab[identref + 2]), ll_reprtab);
 		}
-
-
-		ll_repr_print(level, identab[identref + 1]);
-		if (level) {
-			fprintf(ll_out, " = alloca ");
-			ll_type_print(modetab[identab[identref + 2]]);
-			levels[identref] = 1;
-		}
-		fprintf(ll_out, "\n");
 #endif
 		if (initref)
 		{
@@ -706,28 +715,51 @@ void Declid_gen()
 	}
 	else if (N == 1)
 	{
+#ifdef LLGEN
+		LLVMValueRef arr = NULL, src = NULL;
+#endif
+		ansttype += 4;
+
 		Expr_gen();
 #ifdef LLGEN
+//		TODO;
+//		ll_extract_value();
 		if (level) {
-/*			LLVMBuildArrayAlloca(ll_builder, 
-				LLVMArrayType(ll_type_ref(ansttype + 4), ll_last), 
-				, 
-				(char*)(reprtab + (identab[identref + 1] + 2)));
-	*/	}
+			ll_repr_cpy(identab[identref + 1]);
+			arr = LLVMBuildArrayAlloca(ll_builder, 
+				LLVMArrayType(ll_type_ref(identab[identref + 2] + 4), 3),
+				NULL,
+				ll_reprtab);
+		}
 		else {
-			LLVMAddGlobal(ll_module, LLVMArrayType(ll_type_ref(ansttype + 4), ll_last), (char*)(reprtab + (identab[identref + 1] + 2)));
+			ll_repr_cpy(identab[identref + 1]);
+			arr = LLVMAddGlobal(ll_module, LLVMArrayType(ll_type_ref(identab[identref + 2] + 4), ll_ret_last_val()), ll_reprtab);
 		}
 #endif
 		tocode(DEFARR);
 		tocode(olddispl);
 		if (initref)
 		{
+			int L = tree[tc++ + 1];
+			LLVMValueRef *vals = (LLVMValueRef *)malloc(sizeof(LLVMValueRef) * L);
 			tc++;               // INIT
-			int L = tree[tc++];
-			for (i = 0; i < L; i++)
+			for (i = 0; i < L; i++) {
 				Expr_gen();
 #ifdef LLGEN
-//			LLVMSetInitializer
+				vals[i] = ll_ret_last_val();
+#endif
+			}
+#ifdef LLGEN
+			src = LLVMConstArray(ll_type_ref(ansttype), vals, L);
+			if (level) {
+				LLVMValueRef args[] = { LLVMBuildBitCast(ll_builder, arr, LLVMPointerType(LLVMInt8Type(), 0), "dst"),
+					LLVMConstBitCast(src, LLVMPointerType(LLVMInt8Type(), 0)),
+					ll_ret_const(LINT, L * 4),
+					ll_ret_const(LINT, 4),
+					ll_ret_const(LLBOOL, 0)
+				};
+				LLVMBuildCall(ll_builder, ll_memcpy, args, 5, "funcall");
+			}
 #endif
 			tocode(ASSARR);
 			tocode(olddispl);
@@ -765,9 +797,6 @@ void compstmt_gen()
 			break;
 
 		default:
-#ifdef LLGEN
-			ll_sp = 0;
-#endif
 			Stmt_gen();
 		}
 	}
@@ -778,14 +807,18 @@ void codegen()
 {
 	int oldtc = tc;
 #ifdef LLGEN
+	LLVMTypeRef vprintf[] = { LLVMPointerType(LLVMInt8Type(), 0) };
+	LLVMTypeRef vmemcpy[] = { LLVMPointerType(LLVMInt8Type(), 0), LLVMPointerType(LLVMInt8Type(), 0), 
+		ll_type_ref(LINT), ll_type_ref(LINT), LLVMInt1Type() };
 	ll_module = LLVMModuleCreateWithName("out");
 	ll_builder = LLVMCreateBuilder();
-	
-	ll_out = fopen(LLFILE, "w");
-	fprintf(ll_out, "target triple = \"i686-pc-windows-gnu\"\n");
-	fprintf(ll_out, "declare i32 @printf(i8*, ...)\n\n");
-	fprintf(ll_out, "@.strd = private constant [3 x i8] c\"%%d\\00\"\n\n");
-	fprintf(ll_out, "define void @print(i32 %%x){\ncall i32 (i8*, ...)* @printf(i8* getelementptr inbounds ([3 x i8]* @.strd, i32 0, i32 0), i32 %%x)\nret void\n}\n\n");
+	ll_printf =	LLVMAddFunction(ll_module,
+		"printf",
+		LLVMFunctionType(ll_type_ref(LINT), vprintf, 1, 1));
+	ll_memcpy = LLVMAddFunction(ll_module,
+		"llvm.memcpy.p0i8.p0i8.i32",
+		LLVMFunctionType(ll_type_ref(LVOID), vmemcpy, 5, 0));
+	ll_create_print();
 #endif
 	tc = 0;
 	while (tc < oldtc)
@@ -809,40 +842,32 @@ void codegen()
 			tc++;             // TBegin
 #ifdef LLGEN
 			ret_type = LLVMFunctionType(ll_type_ref(modetab[moderef] + 8), param_types, 0, 0);
-			ll_func = LLVMAddFunction(ll_module, 
-				reprtab + (identab[identref + 1] + 2 < 28 ? 10 : identab[identref + 1] + 2),
+			ll_repr_cpy(identab[identref + 1] + 2 < 28 ? 8 : identab[identref + 1]);
+			ll_func = LLVMAddFunction(ll_module,
+				ll_reprtab,
 				ret_type);
 			ll_vals[identref] = ll_func;
 			entry = LLVMAppendBasicBlock(ll_func, "entry");
 			LLVMPositionBuilderAtEnd(ll_builder, entry);
 
-			level = num_reg = 1;
-			fprintf(ll_out, "define ");
-			ll_type_print(modetab[moderef]);
-			fprintf(ll_out, " ");
-			ll_repr_print(0, identab[identref + 1]);
-			n = modetab[moderef + 1];
-			fprintf(ll_out, "(");
+			level = 1;
+
 			// TODO by ANT
 			/*
 			if (n > 0) {
-				ll_type_print(modetab[moderef + 2]);
-				fprintf(ll_out, " ");
-				ll_repr_print(modetab[moderef + 3]);
+			ll_type_print(modetab[moderef + 2]);
+			fprintf(ll_out, " ");
+			ll_repr_print(modetab[moderef + 3]);
 			}
 			for (i = 1; i < n; i++){
-				fprintf(ll_out, ", ");
-				ll_type_print(modetab[moderef + 2 + 2 * i]);
-				fprintf(ll_out, " ");
-				ll_repr_print(modetab[moderef + 3 + 2 * i]);
+			fprintf(ll_out, ", ");
+			ll_type_print(modetab[moderef + 2 + 2 * i]);
+			fprintf(ll_out, " ");
+			ll_repr_print(modetab[moderef + 3 + 2 * i]);
 			}
 			*/
-			fprintf(ll_out, ") {\n");
 #endif
 			compstmt_gen();
-#ifdef LLGEN
-			fprintf(ll_out, "}\n\n");
-#endif
 			mem[pred] = pc;
 		}
 		break;
@@ -870,6 +895,5 @@ void codegen()
 #ifdef LLGEN
 	LLVMWriteBitcodeToFile(ll_module, "out.bc");
 	LLVMDisposeModule(ll_module);
-	fclose(ll_out);
 #endif
 }

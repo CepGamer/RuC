@@ -1040,7 +1040,7 @@ void function_definition()
 	if (ftype == FUNCVOID && tree[tc - 1] != TReturn)
 	{
 		tc--;
-		totree(TReturn);
+//		totree(TReturn);
 		totree(TEnd);
 	}
 	if ((ftype == FUNCINT || ftype == FUNCCHAR || ftype == FUNCFLOAT) && !wasret)
