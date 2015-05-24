@@ -144,8 +144,6 @@ void ll_ass_fun(int code) {
 	switch (code) {
 	case ASS:
 	case ASSV:
-	case SHLASS:
-	case SHLASSV:
 		switch (ll_stack[ll_sp - 2]) {
 		case TConst:
 			if (level) {
@@ -174,6 +172,16 @@ void ll_ass_fun(int code) {
 		if (code == ASS || code == SHLASS)
 			ll_sp += 2;
 		return;
+		break;
+
+	case SHLASS:
+	case SHLASSV:
+		res = LLVMBuildShl(ll_builder, load, val, "ass_shl");
+		break;
+
+	case SHRASS:
+	case SHRASSV:
+		res = LLVMBuildLShr(ll_builder, load, val, "ass_shr");
 		break;
 
 	case PLUSASS:
@@ -221,11 +229,6 @@ void ll_ass_fun(int code) {
 		res = LLVMBuildSRem(ll_builder, load, val, "ass_rem");
 		break;
 
-	case SHRASS:
-	case SHRASSV:
-//		rem = LLVMBuildSRem(ll_builder, load, val, "ass_rem");
-		break;
-
 	case ANDASS:
 	case ANDASSV:
 		res = LLVMBuildAnd(ll_builder, load, val, "ass_and");
@@ -242,13 +245,28 @@ void ll_ass_fun(int code) {
 		break;
 
 	case POSTINCR:
-	case POSTDECR:
-	case INCR:
-	case DECR:
 	case POSTINCRV:
+
+	case POSTDECR:
 	case POSTDECRV:
+
+	case INCR:
 	case INCRV:
+
+	case DECR:
 	case DECRV:
+
+	case POSTINC:
+	case POSTINCV:
+
+	case POSTDEC:
+	case POSTDECV:
+
+	case INC:
+	case INCV:
+
+	case DEC:
+	case DECV:
 	default:
 		break;
 	}
@@ -264,69 +282,129 @@ void ll_ass_fun(int code) {
 
 void ll_assat(int code)
 {
-	LLVMValueRef tmp[2] = { NULL, NULL };
+	LLVMValueRef tmp[2] = { NULL, NULL }, val;
 	ll_fill_tmp(tmp);
 	switch (code) {
 	case ASSAT:
 	case ASSATV:
-		LLVMBuildStore(ll_builder, tmp[1], tmp[0]);
-		if (code == ASSATV)
-			ll_sp -= 2;
+		val = tmp[0];
 		break;
 
 	case REMASSAT:
 	case REMASSATV:
-		LLVMBuildStore(ll_builder, tmp[1], tmp[0]);
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_rem");
+		val = LLVMBuildSRem(ll_builder, val, tmp[1], "rem_res");
 		break;
 
 	case SHLASSAT:
 	case SHLASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_shl");
+		val = LLVMBuildShl(ll_builder, val, tmp[1], "shl_res");
+		break;
 
 	case SHRASSAT:
 	case SHRASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_shr");
+		val = LLVMBuildLShr(ll_builder, val, tmp[1], "shr_res");
+		break;
 
 	case ANDASSAT:
 	case ANDASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_and");
+		val = LLVMBuildAnd(ll_builder, val, tmp[1], "and_res");
+		break;
 
 	case EXORASSAT:
 	case EXORASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_xor");
+		val = LLVMBuildXor(ll_builder, val, tmp[1], "xor_res");
+		break;
 
 	case ORASSAT:
 	case ORASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_or");
+		val = LLVMBuildOr(ll_builder, val, tmp[1], "or_res");
+		break;
 
 	case PLUSASSAT:
 	case PLUSASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sum");
+		val = LLVMBuildAdd(ll_builder, val, tmp[1], "sum_res");
+		break;
+
 	case PLUSASSATR:
 	case PLUSASSATRV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sum");
+		val = LLVMBuildFAdd(ll_builder, val, tmp[1], "sum_res");
+		break;
 
 	case MINUSASSAT:
 	case MINUSASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sub");
+		val = LLVMBuildSub(ll_builder, val, tmp[1], "sub_res");
+		break;
 	case MINUSASSATR:
 	case MINUSASSATRV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sub");
+		val = LLVMBuildFSub(ll_builder, val, tmp[1], "sub_res");
+		break;
 
 	case MULTASSAT:
 	case MULTASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_mul");
+		val = LLVMBuildMul(ll_builder, val, tmp[1], "mul_res");
+		break;
+
 	case MULTASSATR:
 	case MULTASSATRV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_mul");
+		val = LLVMBuildFMul(ll_builder, val, tmp[1], "mul_res");
+		break;
 
 	case DIVASSAT:
 	case DIVASSATV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_div");
+		val = LLVMBuildSDiv(ll_builder, val, tmp[1], "div_res");
+		break;
+
 	case DIVASSATR:
 	case DIVASSATRV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_div");
+		val = LLVMBuildFDiv(ll_builder, val, tmp[1], "div_res");
+		break;
+
+
+	case INCAT:
+	case INCATV:
+	case DECAT:
+	case DECATV:
+
+	case POSTINCAT:
+	case POSTINCATV:
+	case POSTDECAT:
+	case POSTDECATV:
+
+	case INCATR:
+	case INCATRV:
+		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_inc");
+		val = LLVMBuild(ll_builder, val, tmp[1], "div_res");
+		break;
+
+	case DECATR:
+	case DECATRV:
 
 	case POSTINCATR:
-	case POSTDECATR:
-	case INCATR:
-	case DECATR:
-
 	case POSTINCATRV:
+
+	case POSTDECATR:
 	case POSTDECATRV:
-	case INCATRV:
-	case DECATRV:
 
 	default:
 		break;
 	}
+	LLVMBuildStore(ll_builder, val, tmp[0]);
+	ll_stack[ll_sp - 2] = LLCOMP;
+	ll_stack[ll_sp - 1] = val;
 
 	if ((code >= PLUSASSATV && code <= DIVASSATV) ||
 		(code >= PLUSASSATRV && code <= DIVASSATRV) ||
