@@ -101,7 +101,6 @@ void ll_fill_tmp(LLVMValueRef *tmp) {
 			tmp[tmp_ind] = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "val");
 			break;
 		case TIdenttoval:
-			tmp[tmp_ind] = (LLVMValueRef)(void*)ll_stack[ll_sp - 1];
 		case LLCOMP:
 			tmp[tmp_ind] = ll_stack[ll_sp - 1];
 			break;
@@ -120,9 +119,7 @@ LLVMValueRef ll_ret_last_val() {
 	switch (ll_stack[ll_sp - 2])
 	{
 	case TIdent:
-		toRet = LLVMBuildLoad(ll_builder,
-			ll_identab[ll_stack[ll_sp - 1]],
-			"load");
+		toRet = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "load");
 		break;
 	case TConst:
 		toRet = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
@@ -139,39 +136,73 @@ LLVMValueRef ll_ret_last_val() {
 }
 
 void ll_ass_fun(int code) {
-	LLVMValueRef val = ll_ret_last_val(), res, load;
+	LLVMValueRef val, res, load;
+	if ((code >= POSTINC && code <= DEC) ||
+		(code >= POSTINCV && code <= DECV) ||
+		(code >= POSTINCR && code <= DECR) ||
+		(code >= POSTINCRV && code <= DECRV)) {
+		LLVMValueRef retval;
+		retval = load = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "ld");
+		switch (code)
+		{
+		case POSTINCR:
+		case POSTINCRV:
+			res = LLVMBuildFAdd(ll_builder, load, ll_ret_const(LFLOAT, 1), "inc");
+			break;
+
+		case POSTDECR:
+		case POSTDECRV:
+			res = LLVMBuildFSub(ll_builder, load, ll_ret_const(LFLOAT, 1), "dec");
+			break;
+
+		case INCR:
+		case INCRV:
+			retval = res = LLVMBuildFAdd(ll_builder, load, ll_ret_const(LFLOAT, 1), "inc");
+			break;
+
+		case DECR:
+		case DECRV:
+			retval = res = LLVMBuildFSub(ll_builder, load, ll_ret_const(LFLOAT, 1), "dec");
+			break;
+
+		case POSTINC:
+		case POSTINCV:
+			res = LLVMBuildAdd(ll_builder, load, ll_ret_const(LINT, 1), "inc");
+			break;
+
+		case POSTDEC:
+		case POSTDECV:
+			res = LLVMBuildSub(ll_builder, load, ll_ret_const(LINT, 1), "dec");
+			break;
+
+		case INC:
+		case INCV:
+			retval = res = LLVMBuildAdd(ll_builder, load, ll_ret_const(LINT, 1), "inc");
+			break;
+
+		case DEC:
+		case DECV:
+			retval = res = LLVMBuildSub(ll_builder, load, ll_ret_const(LINT, 1), "dec");
+			break;
+
+		default:
+			break;
+		}
+		LLVMBuildStore(ll_builder, res, ll_identab[ll_stack[ll_sp - 1]]);
+		ll_stack[ll_sp - 2] = LLCOMP;
+		ll_stack[ll_sp - 1] = retval;
+
+		if ((code >= POSTINCV && code <= DECV) ||
+			(code >= POSTINCRV && code <= DECRV))
+			ll_sp -= 2;
+		return;
+	}
+	val = ll_ret_last_val();
 	load = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "ld");
 	switch (code) {
 	case ASS:
 	case ASSV:
-		switch (ll_stack[ll_sp - 2]) {
-		case TConst:
-			if (level) {
-				LLVMValueRef constant = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
-				ll_stack[ll_sp - 3] = (int)(void*)LLVMBuildStore(ll_builder, constant, ll_identab[ll_stack[ll_sp - 3]]);
-			}
-			else {
-				LLVMValueRef constval = ll_ret_last_val();
-				LLVMSetInitializer(ll_identab[ll_stack[ll_sp - 1]], constval);
-				ll_sp += 2;
-			}
-			break;
-		case TCall2:
-			break;
-		case TAddrtoval:
-		case LLCOMP:
-		{
-			LLVMValueRef val = ll_ret_last_val();
-			LLVMBuildStore(ll_builder, val, ll_identab[ll_stack[ll_sp - 1]]);
-			ll_sp += 2;
-			break;
-		}
-		}
-		ll_stack[ll_sp - 4] = LLCOMP;
-		ll_sp -= 4;
-		if (code == ASS || code == SHLASS)
-			ll_sp += 2;
-		return;
+		res = val;
 		break;
 
 	case SHLASS:
@@ -243,30 +274,6 @@ void ll_ass_fun(int code) {
 	case ORASSV:
 		res = LLVMBuildOr(ll_builder, load, val, "ass_or");
 		break;
-
-	case POSTINCR:
-	case POSTINCRV:
-
-	case POSTDECR:
-	case POSTDECRV:
-
-	case INCR:
-	case INCRV:
-
-	case DECR:
-	case DECRV:
-
-	case POSTINC:
-	case POSTINCV:
-
-	case POSTDEC:
-	case POSTDECV:
-
-	case INC:
-	case INCV:
-
-	case DEC:
-	case DECV:
 	default:
 		break;
 	}
@@ -274,20 +281,85 @@ void ll_ass_fun(int code) {
 	ll_stack[ll_sp - 2] = LLCOMP;
 	ll_stack[ll_sp - 1] = res;
 	if ((code >= ASSV && code <= DIVASSV) ||
-		(code >= PLUSASSRV && code <= DIVASSRV) ||
-		(code >= POSTINCV && code <= DECV) ||
-		(code >= POSTINCRV && code <= DECRV))
+		(code >= PLUSASSRV && code <= DIVASSRV))
 		ll_sp -= 2;
+	return;
 }
 
 void ll_assat(int code)
 {
 	LLVMValueRef tmp[2] = { NULL, NULL }, val;
+	if ((code >= POSTINCAT && code <= DECAT) ||
+		(code >= POSTINCATV && code <= DECATV) ||
+		(code >= POSTINCATR && code <= DECATR) ||
+		(code >= POSTINCATRV && code <= DECATRV)) {
+		LLVMValueRef retval = NULL;
+		tmp[0] = ll_ret_last_val();
+		ll_sp += 2;
+		switch (code) {
+		case INCAT:
+		case INCATV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_inc");
+			retval = val = LLVMBuildAdd(ll_builder, val, ll_ret_const(LINT, 1), "inc");
+			break;
+
+		case DECAT:
+		case DECATV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_dec");
+			retval = val = LLVMBuildSub(ll_builder, val, ll_ret_const(LINT, 1), "dec");
+			break;
+
+		case POSTINCAT:
+		case POSTINCATV:
+			retval = LLVMBuildLoad(ll_builder, tmp[0], "load_postinc");
+			val = LLVMBuildAdd(ll_builder, retval, ll_ret_const(LINT, 1), "postinc");
+			break;
+
+		case POSTDECAT:
+		case POSTDECATV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_postdec");
+			val = LLVMBuildSub(ll_builder, val, ll_ret_const(LINT, 1), "postdec");
+			break;
+
+		case INCATR:
+		case INCATRV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_inc");
+			retval = val = LLVMBuildFAdd(ll_builder, val, ll_ret_const(LFLOAT, 1), "inc");
+			break;
+
+		case DECATR:
+		case DECATRV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_dec");
+			retval = val = LLVMBuildSub(ll_builder, val, ll_ret_const(LFLOAT, 1), "dec");
+			break;
+
+		case POSTINCATR:
+		case POSTINCATRV:
+			retval = LLVMBuildLoad(ll_builder, tmp[0], "load_postinc");
+			val = LLVMBuildFAdd(ll_builder, retval, ll_ret_const(LFLOAT, 1), "postinc");
+			break;
+
+		case POSTDECATR:
+		case POSTDECATRV:
+			val = LLVMBuildLoad(ll_builder, tmp[0], "load_postdec");
+			val = LLVMBuildFSub(ll_builder, val, ll_ret_const(LFLOAT, 1), "postdec");
+			break;
+		default:
+			break;
+		}
+		LLVMBuildStore(ll_builder, val, tmp[0]);
+		ll_stack[ll_sp - 2] = LLCOMP;
+		ll_stack[ll_sp - 1] = retval;
+		if ((code >= POSTINCATV && code <= DECATV) ||
+			(code >= POSTINCATRV && code <= DECRV))
+			ll_sp -= 2;
+		return;
+	}
 	ll_fill_tmp(tmp);
 	switch (code) {
 	case ASSAT:
 	case ASSATV:
-		val = tmp[0];
+		val = tmp[1];
 		break;
 
 	case REMASSAT:
@@ -373,32 +445,6 @@ void ll_assat(int code)
 		val = LLVMBuildFDiv(ll_builder, val, tmp[1], "div_res");
 		break;
 
-
-	case INCAT:
-	case INCATV:
-	case DECAT:
-	case DECATV:
-
-	case POSTINCAT:
-	case POSTINCATV:
-	case POSTDECAT:
-	case POSTDECATV:
-
-	case INCATR:
-	case INCATRV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_inc");
-		val = LLVMBuild(ll_builder, val, tmp[1], "div_res");
-		break;
-
-	case DECATR:
-	case DECATRV:
-
-	case POSTINCATR:
-	case POSTINCATRV:
-
-	case POSTDECATR:
-	case POSTDECATRV:
-
 	default:
 		break;
 	}
@@ -407,9 +453,7 @@ void ll_assat(int code)
 	ll_stack[ll_sp - 1] = val;
 
 	if ((code >= PLUSASSATV && code <= DIVASSATV) ||
-		(code >= PLUSASSATRV && code <= DIVASSATRV) ||
-		(code >= POSTINCATV && code <= DECATV) ||
-		(code >= POSTINCATRV && code <= DECRV))
+		(code >= PLUSASSATRV && code <= DIVASSATRV))
 		ll_sp -= 2;
 }
 
@@ -543,24 +587,6 @@ void ll_tocode(int c)
 	case LGT:
 	case LLE:
 	case LGE:
-
-	case POSTINC:
-	case POSTDEC:
-	case INC:
-		break;
-	case DEC:
-	case POSTINCAT:
-	case POSTDECAT:
-	case INCAT:
-	case DECAT:
-	case POSTINCV:
-	case POSTDECV:
-	case INCV:
-	case DECV:
-	case POSTINCATV:
-	case POSTDECATV:
-	case INCATV:
-	case DECATV:
 
 	case UNMINUS:
 
