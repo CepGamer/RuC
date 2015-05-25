@@ -698,6 +698,8 @@ void ll_tocode(int c)
 	case UNMINUS:
 
 	case LOGAND:
+		break;
+
 	case LOGOR:
 
 	case ANDADDR:
@@ -1094,9 +1096,22 @@ void Stmt_gen()
 	{
 		int doref = tree[tc++];
 		int oldbreak = adbreak, oldcont = adcont, ad = pc;
+#ifdef LLGEN
+		LLVMBasicBlockRef cond, body, end, prevend = ll_funend;
+		ll_funend = end = LLVMInsertBasicBlock(ll_funend, "while.end");
+		body = LLVMInsertBasicBlock(end, "while.body");
+		cond = LLVMInsertBasicBlock(body, "while.cond");
+
+		LLVMBuildBr(ll_builder, cond);
+		LLVMPositionBuilderAtEnd(ll_builder, cond);
+#endif
 		adcont = 0;
 		_box = VAL;
 		Expr_gen();
+#ifdef LLGEN
+		LLVMBuildCondBr(ll_builder, ll_ret_last_val(), body, end);
+		LLVMPositionBuilderAtEnd(ll_builder, body);
+#endif
 		tocode(BE0);
 		mem[pc] = 0;
 		adbreak = pc++;
@@ -1108,6 +1123,11 @@ void Stmt_gen()
 		adbreakend();
 		adbreak = oldbreak;
 		adcont = oldcont;
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, cond);
+		LLVMPositionBuilderAtEnd(ll_builder, end);
+		ll_funend = prevend;
+#endif
 	}
 	break;
 
@@ -1454,8 +1474,10 @@ void Declid_gen()
 		if (initref)
 		{
 			int L = tree[tc++ + 1];
+#ifdef LLGEN
 			LLVMValueRef *vals = (LLVMValueRef *)malloc(sizeof(LLVMValueRef) * L);
 			LLVMValueRef indices[] = { ll_ret_const(LINT, 0) };
+#endif
 			tc++;               // INIT
 			for (i = 0; i < L; i++) {
 				Expr_gen();
