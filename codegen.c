@@ -548,75 +548,74 @@ void ll_binop(int code) {
 		break;
 	case EQEQ:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOEQ,  tmp[0], tmp[1], "eq");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntEQ, tmp[0], tmp[1], "eq");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntEQ, tmp[0], tmp[1], "eq");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOEQ, tmp[0], tmp[1]);
-			else
 			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntEQ, tmp[0], tmp[1]);
+		break;
+	case EQEQR:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOEQ, tmp[0], tmp[1], "eq");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOEQ, tmp[0], tmp[1]);
 		break;
 	case NOTEQ:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealONE, tmp[0], tmp[1], "not_eq");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntNE, tmp[0], tmp[1], "not_eq");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntNE, tmp[0], tmp[1], "not_eq");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealONE, tmp[0], tmp[1]);
-			else
-				ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntNE, tmp[0], tmp[1]);
+			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntNE, tmp[0], tmp[1]);
+		break;
+	case NOTEQR:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealONE, tmp[0], tmp[1], "not_eq");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealONE, tmp[0], tmp[1]);
 		break;
 	case LLT:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOLT, tmp[0], tmp[1], "lt");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSLT, tmp[0], tmp[1], "lt");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSLT, tmp[0], tmp[1], "lt");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOLT, tmp[0], tmp[1]);
-			else
-				ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSLT, tmp[0], tmp[1]);
+			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSLT, tmp[0], tmp[1]);
+		break;
+	case LLTR:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOLT, tmp[0], tmp[1], "lt");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOLT, tmp[0], tmp[1]);
 		break;
 	case LGT:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOGT, tmp[0], tmp[1], "gt");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSGT, tmp[0], tmp[1], "gt");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSGT, tmp[0], tmp[1], "gt");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOGT, tmp[0], tmp[1]);
-			else
-				ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSGT, tmp[0], tmp[1]);
+			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSGT, tmp[0], tmp[1]);
 		break;
+	case LGTR:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOGT, tmp[0], tmp[1], "gt");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOGT, tmp[0], tmp[1]);
 	case LLE:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOLE, tmp[0], tmp[1], "le");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSLE, tmp[0], tmp[1], "le");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSLE, tmp[0], tmp[1], "le");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOLE, tmp[0], tmp[1]);
-			else
-				ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSLE, tmp[0], tmp[1]);
+			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSLE, tmp[0], tmp[1]);
+		break;
+	case LLER:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOLE, tmp[0], tmp[1], "le");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOLE, tmp[0], tmp[1]);
 		break;
 	case LGE:
 		if (level)
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOGE, tmp[0], tmp[1], "ge");
-			else
-				ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSGE, tmp[0], tmp[1], "ge");
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildICmp(ll_builder, LLVMIntSGE, tmp[0], tmp[1], "ge");
 		else
-			if (ansttype == LFLOAT)
-				ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOGE, tmp[0], tmp[1]);
-			else
-				ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSGE, tmp[0], tmp[1]);
+			ll_stack[ll_sp - 1] = LLVMConstICmp(LLVMIntSGE, tmp[0], tmp[1]);
+		break;
+	case LGER:
+		if (level)
+			ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildFCmp(ll_builder, LLVMRealOGE, tmp[0], tmp[1], "ge");
+		else
+			ll_stack[ll_sp - 1] = LLVMConstFCmp(LLVMRealOGE, tmp[0], tmp[1]);
 		break;
 	default:
 		break;
@@ -696,6 +695,7 @@ void ll_tocode(int c)
 		break;
 
 	case UNMINUS:
+	case UNMINUSR:
 
 	case LOGAND:
 		break;
@@ -704,24 +704,13 @@ void ll_tocode(int c)
 
 	case ANDADDR:
 	case MULTADDR:
+
 	case LNOT:
 	case LOGNOT:
 
-	case EQEQR:
-	case NOTEQR:
-	case LLTR:
-	case LGTR:
-	case LLER:
-	case LGER:
-
-	case UNMINUSR:
 	default:
 		break;
 	}
-/*	if ((c >= ASS && c <= DIVASS) || (c >= ASSV && c <= DIVASSV) ||
-		(c >= PLUSASSR && c <= DIVASSR) || (c >= PLUSASSRV && c <= DIVASSRV) ||
-		(c >= POSTINC && c <= DEC) || (c >= POSTINCV && c <= DECV) ||
-		(c >= POSTINCR && c <= DECR) || (c >= POSTINCRV && c <= DECRV))*/
 }
 
 void ll_constr_print_call(int type) {
@@ -1135,18 +1124,36 @@ void Stmt_gen()
 	{
 		int condref = tree[tc++];
 		int oldbreak = adbreak, oldcont = adcont, ad = pc;
+#ifdef LLGEN
+		LLVMBasicBlockRef cond, body, end, prevend = ll_funend;
+		ll_funend = end = LLVMInsertBasicBlock(ll_funend, "do.end");
+		cond = LLVMInsertBasicBlock(end, "do.cond");
+		body = LLVMInsertBasicBlock(cond, "do.body");
+
+		LLVMBuildBr(ll_builder, body);
+		LLVMPositionBuilderAtEnd(ll_builder, body);
+#endif
 		adbreak = 0;
 		adcont = 0;
 		_box = DECX;
 		Stmt_gen();
 		adcontend();
 		_box = VAL;
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, cond);
+		LLVMPositionBuilderAtEnd(ll_builder, cond);
+#endif
 		Expr_gen();
 		tocode(BNE0);
 		tocode(ad);
 		adbreakend();
 		adbreak = oldbreak;
 		adcont = oldcont;
+#ifdef LLGEN
+		LLVMBuildCondBr(ll_builder, ll_ret_last_val(), body, end);
+		LLVMPositionBuilderAtEnd(ll_builder, end);
+		ll_funend = prevend;
+#endif
 	}
 	break;
 
