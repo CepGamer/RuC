@@ -29,7 +29,7 @@ LLVMModuleRef ll_module = NULL;
 LLVMBuilderRef ll_builder = NULL;
 LLVMValueRef ll_func = NULL, ll_printf, ll_memcpy;
 LLVMValueRef print[12];
-LLVMBasicBlockRef ll_funend;
+LLVMBasicBlockRef ll_funend, ll_continue;
 
 int ll_sp = 0, ll_spl = 0;
 int regs[10000] = { 0 };
@@ -90,29 +90,6 @@ LLVMValueRef ll_ret_const(int type, int value) {
 	}
 }
 
-void ll_fill_tmp(LLVMValueRef *tmp) {
-	int tmp_ind = 1;
-	do
-	switch (ll_stack[ll_sp - 2])
-	{
-		case TConst:
-			tmp[tmp_ind] = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
-			break;
-		case TIdent:
-			tmp[tmp_ind] = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "val");
-			break;
-		case TIdenttoval:
-		case LLCOMP:
-			tmp[tmp_ind] = ll_stack[ll_sp - 1];
-			break;
-		default:
-			break;
-	}
-	while (ll_sp -= 2, tmp_ind-- > 0);
-	ll_stack[ll_sp++] = LLCOMP;
-	ll_sp++;
-}
-
 LLVMValueRef ll_ret_last_val() {
 	LLVMValueRef toRet = NULL;
 	if (ll_sp < 2)
@@ -121,6 +98,7 @@ LLVMValueRef ll_ret_last_val() {
 	{
 	case TIdent:
 		toRet = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "load");
+		LLVMSetAlignment(toRet, ansttype == LCHAR ? 1 : 4);
 		break;
 	case TConst:
 		toRet = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
@@ -136,6 +114,30 @@ LLVMValueRef ll_ret_last_val() {
 	return toRet;
 }
 
+void ll_fill_tmp(LLVMValueRef *tmp) {
+	int tmp_ind = 1;
+	do
+	switch (ll_stack[ll_sp - 2])
+	{
+		case TConst:
+			tmp[tmp_ind] = ll_ret_const(ansttype, ll_stack[ll_sp - 1]);
+			break;
+		case TIdent:
+			tmp[tmp_ind] = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "val");
+			LLVMSetAlignment(tmp[tmp_ind], ansttype == LCHAR ? 1 : 4);
+			break;
+		case TIdenttoval:
+		case LLCOMP:
+			tmp[tmp_ind] = ll_stack[ll_sp - 1];
+			break;
+		default:
+			break;
+	}
+	while (ll_sp -= 2, tmp_ind-- > 0);
+	ll_stack[ll_sp++] = LLCOMP;
+	ll_sp++;
+}
+
 void ll_ass_fun(int code) {
 	LLVMValueRef val, res, load;
 	if ((code >= POSTINC && code <= DEC) ||
@@ -144,6 +146,7 @@ void ll_ass_fun(int code) {
 		(code >= POSTINCRV && code <= DECRV)) {
 		LLVMValueRef retval;
 		retval = load = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "ld");
+		LLVMSetAlignment(load, ansttype == LCHAR ? 1 : 4);
 		switch (code)
 		{
 		case POSTINCR:
@@ -189,7 +192,7 @@ void ll_ass_fun(int code) {
 		default:
 			break;
 		}
-		LLVMBuildStore(ll_builder, res, ll_identab[ll_stack[ll_sp - 1]]);
+		LLVMSetAlignment(LLVMBuildStore(ll_builder, res, ll_identab[ll_stack[ll_sp - 1]]), ansttype == LCHAR ? 1 : 4);
 		ll_stack[ll_sp - 2] = LLCOMP;
 		ll_stack[ll_sp - 1] = retval;
 
@@ -199,7 +202,16 @@ void ll_ass_fun(int code) {
 		return;
 	}
 	val = ll_ret_last_val();
-	load = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "ld");
+	if (!level && (code == ASS || code == ASSV)) {
+		LLVMSetInitializer(ll_identab[ll_stack[ll_sp - 1]], val);
+		ll_stack[ll_sp - 1] = val;
+		ll_stack[ll_sp - 2] = LLCOMP;
+		if (code == ASSV)
+			ll_sp -= 2;
+		return;
+	}
+	else
+		LLVMSetAlignment(load = LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "ld"), ansttype == LCHAR ? 1 : 4);
 	switch (code) {
 	case ASS:
 	case ASSV:
@@ -278,7 +290,7 @@ void ll_ass_fun(int code) {
 	default:
 		break;
 	}
-	LLVMBuildStore(ll_builder, res, ll_identab[ll_stack[ll_sp - 1]]);
+	LLVMSetAlignment(LLVMBuildStore(ll_builder, res, ll_identab[ll_stack[ll_sp - 1]]), ansttype == LCHAR ? 1 : 4);
 	ll_stack[ll_sp - 2] = LLCOMP;
 	ll_stack[ll_sp - 1] = res;
 	if ((code >= ASSV && code <= DIVASSV) ||
@@ -297,58 +309,52 @@ void ll_assat(int code)
 		LLVMValueRef retval = NULL;
 		tmp[0] = ll_ret_last_val();
 		ll_sp += 2;
+		val = LLVMBuildLoad(ll_builder, tmp[0], "ld");
+		LLVMSetAlignment(val, ansttype == LCHAR ? 1 : 4);
 		switch (code) {
 		case INCAT:
 		case INCATV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_inc");
 			retval = val = LLVMBuildAdd(ll_builder, val, ll_ret_const(LINT, 1), "inc");
 			break;
 
 		case DECAT:
 		case DECATV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_dec");
 			retval = val = LLVMBuildSub(ll_builder, val, ll_ret_const(LINT, 1), "dec");
 			break;
 
 		case POSTINCAT:
 		case POSTINCATV:
-			retval = LLVMBuildLoad(ll_builder, tmp[0], "load_postinc");
 			val = LLVMBuildAdd(ll_builder, retval, ll_ret_const(LINT, 1), "postinc");
 			break;
 
 		case POSTDECAT:
 		case POSTDECATV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_postdec");
 			val = LLVMBuildSub(ll_builder, val, ll_ret_const(LINT, 1), "postdec");
 			break;
 
 		case INCATR:
 		case INCATRV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_inc");
 			retval = val = LLVMBuildFAdd(ll_builder, val, ll_ret_const(LFLOAT, 1), "inc");
 			break;
 
 		case DECATR:
 		case DECATRV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_dec");
 			retval = val = LLVMBuildSub(ll_builder, val, ll_ret_const(LFLOAT, 1), "dec");
 			break;
 
 		case POSTINCATR:
 		case POSTINCATRV:
-			retval = LLVMBuildLoad(ll_builder, tmp[0], "load_postinc");
 			val = LLVMBuildFAdd(ll_builder, retval, ll_ret_const(LFLOAT, 1), "postinc");
 			break;
 
 		case POSTDECATR:
 		case POSTDECATRV:
-			val = LLVMBuildLoad(ll_builder, tmp[0], "load_postdec");
 			val = LLVMBuildFSub(ll_builder, val, ll_ret_const(LFLOAT, 1), "postdec");
 			break;
 		default:
 			break;
 		}
-		LLVMBuildStore(ll_builder, val, tmp[0]);
+		LLVMSetAlignment(LLVMBuildStore(ll_builder, val, tmp[0]), ansttype == LCHAR ? 1 : 4);
 		ll_stack[ll_sp - 2] = LLCOMP;
 		ll_stack[ll_sp - 1] = retval;
 		if ((code >= POSTINCATV && code <= DECATV) ||
@@ -357,6 +363,8 @@ void ll_assat(int code)
 		return;
 	}
 	ll_fill_tmp(tmp);
+	if (code != ASSAT && code != ASSATV)
+		LLVMSetAlignment(val = LLVMBuildLoad(ll_builder, tmp[0], "ld"), ansttype == LCHAR ? 1 : 4);
 	switch (code) {
 	case ASSAT:
 	case ASSATV:
@@ -365,91 +373,78 @@ void ll_assat(int code)
 
 	case REMASSAT:
 	case REMASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_rem");
 		val = LLVMBuildSRem(ll_builder, val, tmp[1], "rem_res");
 		break;
 
 	case SHLASSAT:
 	case SHLASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_shl");
 		val = LLVMBuildShl(ll_builder, val, tmp[1], "shl_res");
 		break;
 
 	case SHRASSAT:
 	case SHRASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_shr");
 		val = LLVMBuildLShr(ll_builder, val, tmp[1], "shr_res");
 		break;
 
 	case ANDASSAT:
 	case ANDASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_and");
 		val = LLVMBuildAnd(ll_builder, val, tmp[1], "and_res");
 		break;
 
 	case EXORASSAT:
 	case EXORASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_xor");
 		val = LLVMBuildXor(ll_builder, val, tmp[1], "xor_res");
 		break;
 
 	case ORASSAT:
 	case ORASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_or");
 		val = LLVMBuildOr(ll_builder, val, tmp[1], "or_res");
 		break;
 
 	case PLUSASSAT:
 	case PLUSASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sum");
 		val = LLVMBuildAdd(ll_builder, val, tmp[1], "sum_res");
 		break;
 
 	case PLUSASSATR:
 	case PLUSASSATRV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sum");
 		val = LLVMBuildFAdd(ll_builder, val, tmp[1], "sum_res");
 		break;
 
 	case MINUSASSAT:
 	case MINUSASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sub");
 		val = LLVMBuildSub(ll_builder, val, tmp[1], "sub_res");
 		break;
+
 	case MINUSASSATR:
 	case MINUSASSATRV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_sub");
 		val = LLVMBuildFSub(ll_builder, val, tmp[1], "sub_res");
 		break;
 
 	case MULTASSAT:
 	case MULTASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_mul");
 		val = LLVMBuildMul(ll_builder, val, tmp[1], "mul_res");
 		break;
 
 	case MULTASSATR:
 	case MULTASSATRV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_mul");
 		val = LLVMBuildFMul(ll_builder, val, tmp[1], "mul_res");
 		break;
 
 	case DIVASSAT:
 	case DIVASSATV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_div");
 		val = LLVMBuildSDiv(ll_builder, val, tmp[1], "div_res");
 		break;
 
 	case DIVASSATR:
 	case DIVASSATRV:
-		val = LLVMBuildLoad(ll_builder, tmp[0], "arrval_div");
 		val = LLVMBuildFDiv(ll_builder, val, tmp[1], "div_res");
 		break;
 
 	default:
 		break;
 	}
-	LLVMBuildStore(ll_builder, val, tmp[0]);
+	LLVMSetAlignment(LLVMBuildStore(ll_builder, val, tmp[0]), ansttype == LCHAR ? 1 : 4);
 	ll_stack[ll_sp - 2] = LLCOMP;
 	ll_stack[ll_sp - 1] = val;
 
@@ -653,6 +648,7 @@ void ll_tocode(int c)
 	case LOAD:
 		ll_stack[ll_sp - 2] = LLCOMP;
 		ll_stack[ll_sp - 1] = (int)(void*)LLVMBuildLoad(ll_builder, ll_identab[ll_stack[ll_sp - 1]], "load");
+		LLVMSetAlignment(ll_stack[ll_sp - 1], ansttype == LCHAR ? 1 : 4);
 		break;
 	case WIDEN:
 	{
@@ -687,6 +683,7 @@ void ll_tocode(int c)
 	}
 	case LAT:
 		ll_stack[ll_sp + 1] = LLVMBuildLoad(ll_builder, ll_ret_last_val(), "ld");
+		LLVMSetAlignment(ll_stack[ll_sp + 1], ansttype == LCHAR ? 1 : 4);
 		ll_sp += 2;
 		break;
 
@@ -732,7 +729,7 @@ void ll_constr_print_call(int type) {
 		str = LLVMBuildGlobalString(ll_builder, ll_reprtab, "printi32.str");
 		break;
 	case LFLOAT:
-		params[0] = ll_type_ref(LFLOAT);
+		params[0] = LLVMDoubleType();
 		type = LLVMFunctionType(LLVMVoidType(), params, 1, 0);
 		print[-LFLOAT] = ll_func = LLVMAddFunction(ll_module, "printfloat", type);
 		strcpy(ll_reprtab, "%f\0");
@@ -917,6 +914,7 @@ void Expr_gen()
 			tocode(SLICE);
 #ifdef LLGEN
 			ll_tocode(SLICE);
+			ansttype += 4;
 #endif
 		}
 		break;
@@ -943,7 +941,7 @@ void Expr_gen()
 		{
 #ifdef LLGEN
 			ll_stack[ll_sp++] = TCall2;
-			ll_stack[ll_sp++] = LLVMBuildCall(ll_builder, ll_identab[-tree[tc]], NULL, 0, LLVMGetValueName(ll_identab[-tree[tc]]));
+			ll_stack[ll_sp++] = LLVMBuildCall(ll_builder, ll_identab[-tree[tc]], NULL, 0, /*LLVMGetValueName(ll_identab[-tree[tc]])*/ "");
 			ll_tocode(CALL2);
 #endif
 			tocode(CALL2);
@@ -1089,7 +1087,7 @@ void Stmt_gen()
 		LLVMBasicBlockRef cond, body, end, prevend = ll_funend;
 		ll_funend = end = LLVMInsertBasicBlock(ll_funend, "while.end");
 		body = LLVMInsertBasicBlock(end, "while.body");
-		cond = LLVMInsertBasicBlock(body, "while.cond");
+		ll_continue = cond = LLVMInsertBasicBlock(body, "while.cond");
 
 		LLVMBuildBr(ll_builder, cond);
 		LLVMPositionBuilderAtEnd(ll_builder, cond);
@@ -1128,7 +1126,7 @@ void Stmt_gen()
 		LLVMBasicBlockRef cond, body, end, prevend = ll_funend;
 		ll_funend = end = LLVMInsertBasicBlock(ll_funend, "do.end");
 		cond = LLVMInsertBasicBlock(end, "do.cond");
-		body = LLVMInsertBasicBlock(cond, "do.body");
+		ll_continue = body = LLVMInsertBasicBlock(cond, "do.body");
 
 		LLVMBuildBr(ll_builder, body);
 		LLVMPositionBuilderAtEnd(ll_builder, body);
@@ -1161,11 +1159,22 @@ void Stmt_gen()
 	{
 		int fromref = tree[tc++], condref = tree[tc++], incrref = tree[tc++], stmtref = tree[tc++];
 		int oldbreak = adbreak, oldcont = adcont, ad = pc, incrtc, endtc;
+#ifdef LLGEN
+		LLVMBasicBlockRef cond, body, inc, end, prevend = ll_funend;
+		ll_funend = end = LLVMInsertBasicBlock(ll_funend, "for.end");
+		ll_continue = inc = LLVMInsertBasicBlock(end, "for.inc");
+		body = LLVMInsertBasicBlock(inc, "for.body");
+		cond = LLVMInsertBasicBlock(body, "for.cond");
+#endif
 		adcont = 0;
 		if (fromref)
 		{
 			Expr_gen();         // init
 		}
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, cond);
+		LLVMPositionBuilderAtEnd(ll_builder, cond);
+#endif
 		ad = pc;
 		if (condref)
 		{
@@ -1174,11 +1183,19 @@ void Stmt_gen()
 			mem[pc] = 0;
 			adbreak = pc++;
 		}
+#ifdef LLGEN
+		LLVMBuildCondBr(ll_builder, ll_ret_last_val(), body, end);
+		LLVMPositionBuilderAtEnd(ll_builder, body);
+#endif
 		incrtc = tc;
 		tc = stmtref;
 		_box = DECX;
 		Stmt_gen();
 		adcontend();
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, inc);
+		LLVMPositionBuilderAtEnd(ll_builder, inc);
+#endif
 		if (incrref)
 		{
 			endtc = tc;
@@ -1186,11 +1203,19 @@ void Stmt_gen()
 			Expr_gen();         // incr
 			tc = endtc;
 		}
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, cond);
+		LLVMPositionBuilderAtEnd(ll_builder, end);
+#endif
 		tocode(RUCB);
 		tocode(ad);
 		adbreakend();
 		adbreak = oldbreak;
 		adcont = oldcont;
+#ifdef LLGEN
+		ll_funend = prevend;
+#endif
+
 	}
 	break;
 
@@ -1244,6 +1269,9 @@ void Stmt_gen()
 		tocode(RUCB);
 		mem[pc] = adbreak;
 		adbreak = pc++;
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, ll_funend);
+#endif
 	}
 	break;
 
@@ -1252,6 +1280,9 @@ void Stmt_gen()
 		tocode(RUCB);
 		mem[pc] = adcont;
 		adcont = pc++;
+#ifdef LLGEN
+		LLVMBuildBr(ll_builder, ll_continue);
+#endif
 	}
 	break;
 
@@ -1307,6 +1338,7 @@ void Stmt_gen()
 			ll_reprtab[++len] = '\n';
 			ll_reprtab[++len] = '\0';
 			args[1] = LLVMBuildLoad(ll_builder, ll_identab[tree[tc]], "toprint");
+			LLVMSetAlignment(args[1], ansttype == LCHAR ? 1 : 4);
 			break;
 		case LFLOAT:
 			ll_reprtab[++len] = ' ';
@@ -1317,6 +1349,8 @@ void Stmt_gen()
 			ll_reprtab[++len] = '\n';
 			ll_reprtab[++len] = '\0';
 			args[1] = LLVMBuildLoad(ll_builder, ll_identab[tree[tc]], "toprint");
+			LLVMSetAlignment(args[1], ansttype == LCHAR ? 1 : 4);
+			args[1] = LLVMBuildFPExt(ll_builder, args[1], LLVMDoubleType(), "conv");
 			break;
 		case LCHAR:
 			ll_reprtab[++len] = ' ';
@@ -1327,6 +1361,7 @@ void Stmt_gen()
 			ll_reprtab[++len] = '\n';
 			ll_reprtab[++len] = '\0';
 			args[1] = LLVMBuildLoad(ll_builder, ll_identab[tree[tc]], "toprint");
+			LLVMSetAlignment(args[1], ansttype == LCHAR ? 1 : 4);
 			break;
 		case ROWOFINT:
 		case ROWOFCHAR:
@@ -1340,6 +1375,7 @@ void Stmt_gen()
 				ll_reprtab[++len] = 'd';
 				args[1 + i] = LLVMBuildGEP(ll_builder, ll_identab[tree[tc]], indices, 1, "point");
 				args[1 + i] = LLVMBuildLoad(ll_builder, args[1 + i], "ld");
+				LLVMSetAlignment(args[1 + i], ansttype == LCHAR ? 1 : 4);
 			}
 			ll_reprtab[++len] = '\n';
 			ll_reprtab[++len] = '\0';
@@ -1349,12 +1385,14 @@ void Stmt_gen()
 			ll_reprtab[++len] = '=';
 			argnum = ll_identab[tree[tc] + 3];
 			for (i = 0; i < argnum; i++) {
-				LLVMValueRef indices[] = { ll_ret_const(LINT, i) };
+				LLVMValueRef indices[] = { ll_ret_const(LINT, 0), ll_ret_const(LINT, i)};
 				ll_reprtab[++len] = ' ';
 				ll_reprtab[++len] = '%';
 				ll_reprtab[++len] = 'f';
-				args[1 + i] = LLVMBuildGEP(ll_builder, ll_identab[tree[tc]], indices, 1, "point");
+				args[1 + i] = LLVMBuildGEP(ll_builder, ll_identab[tree[tc]], indices, 2, "point");
 				args[1 + i] = LLVMBuildLoad(ll_builder, args[1 + i], "ld");
+				LLVMSetAlignment(args[1 + i], ansttype == LCHAR ? 1 : 4);
+				args[1 + i] = LLVMBuildFPExt(ll_builder, args[1 + i], LLVMDoubleType(), "conv");
 			}
 			ll_reprtab[++len] = '\n';
 			ll_reprtab[++len] = '\0';
@@ -1425,6 +1463,7 @@ void Declid_gen()
 		else {
 			ll_identab[identref] = LLVMAddGlobal(ll_module, ll_type_ref(ansttype), ll_reprtab);
 		}
+		LLVMSetAlignment(ll_identab[identref], ansttype == LCHAR ? 1 : 4);
 #endif
 		if (initref)
 		{
@@ -1470,11 +1509,11 @@ void Declid_gen()
 				LLVMArrayType(ll_type_ref(ansttype), arr_size),
 				NULL,
 				ll_reprtab);
-			LLVMSetAlignment(arr, ansttype == LCHAR ? 1 : 4);
 		} else {
 			ll_repr_cpy(identab[identref + 1]);
 			ll_identab[identref] = arr = LLVMAddGlobal(ll_module, LLVMArrayType(ll_type_ref(ansttype), arr_size), ll_reprtab);
 		}
+		LLVMSetAlignment(arr, ansttype == LCHAR ? 1 : 4);
 #endif
 		tocode(DEFARR);
 		tocode(olddispl);
@@ -1493,7 +1532,7 @@ void Declid_gen()
 #endif
 			}
 #ifdef LLGEN
-			src = LLVMConstArray(ll_type_ref(LINT), vals, L);
+			src = LLVMConstArray(ll_type_ref(ansttype), vals, L);
 			if (level) {
 				LLVMValueRef arrg = LLVMAddGlobal(ll_module, LLVMArrayType(ll_type_ref(ansttype), L), ll_reprtab);
 				LLVMValueRef args[] = { LLVMBuildBitCast(ll_builder, arr, LLVMPointerType(LLVMInt8Type(), 0), "dst"),
@@ -1629,6 +1668,7 @@ void codegen()
 #endif
 			compstmt_gen();
 #ifdef LLGEN
+			LLVMPositionBuilderAtEnd(ll_builder, end);
 			LLVMBuildBr(ll_builder, end);
 #endif
 			mem[pred] = pc;
