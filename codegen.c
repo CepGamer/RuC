@@ -1650,21 +1650,6 @@ void codegen()
 			LLVMPositionBuilderAtEnd(ll_builder, entry);
 
 			level = 1;
-
-			// TODO by ANT
-			/*
-			if (n > 0) {
-			ll_type_print(modetab[moderef + 2]);
-			fprintf(ll_out, " ");
-			ll_repr_print(modetab[moderef + 3]);
-			}
-			for (i = 1; i < n; i++){
-			fprintf(ll_out, ", ");
-			ll_type_print(modetab[moderef + 2 + 2 * i]);
-			fprintf(ll_out, " ");
-			ll_repr_print(modetab[moderef + 3 + 2 * i]);
-			}
-			*/
 #endif
 			compstmt_gen();
 #ifdef LLGEN

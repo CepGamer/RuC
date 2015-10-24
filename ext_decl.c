@@ -1037,10 +1037,10 @@ void function_definition()
 	pred = tc++;
 	repr = oldrepr;
 	block(0);
-	if (ftype == FUNCVOID && tree[tc - 1] != TReturn)
+	if (ftype == FUNCVOID && tree[tc - 2] != TReturn)
 	{
 		tc--;
-//		totree(TReturn);
+		totree(TReturn);
 		totree(TEnd);
 	}
 	if ((ftype == FUNCINT || ftype == FUNCCHAR || ftype == FUNCFLOAT) && !wasret)

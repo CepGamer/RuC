@@ -110,7 +110,6 @@
 #define INCATV     247
 #define DECATV     248
 
-
 #define UNMINUS   49
 
 #define ANDADDR   50

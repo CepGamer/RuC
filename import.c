@@ -172,7 +172,7 @@ void auxprint(int r, int t)
 	if (t == LINT)
 		printf(" %i", r);
 	else if (t == LCHAR)
-		printf("%c", r);
+		printf(" %c", r);
 	else if (t == LFLOAT)
 	{
 		memcpy(&rf, &r, sizeof(int));
